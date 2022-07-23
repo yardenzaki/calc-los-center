@@ -17,10 +17,14 @@ steps:
 
 
 @Author: Yarden Zaki
-@Date: 07/01/2022
-@Version: 1.0
+@Date: 23/07/2022
+@Version: 1.1
 @Links: https://github.com/yardenzaki
 @License: MIT
+
+#Whats new in version 1.1:
+* Added a function to calculate the PSNR between 2 images so that we can compare the quality of the video in terms of blurriness
+
 """
 
 import numpy as np
@@ -35,6 +39,14 @@ import math
 import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
+
+# function that computes psnr between two images
+def psnr(img1, img2):
+    mse = np.mean((img1 - img2) ** 2)
+    if mse == 0:
+        return 100
+    PIXEL_MAX = 255.0
+    return 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
 
 
 def select_ROI(frame):
@@ -319,8 +331,8 @@ analyze_frames = True
 # a=420## Set analysis window bounds [pixels]
 # b=220# #y 1080q
 # width=None #2600 #160 #300 #1050 #200 #desired window's width ---- For original frame size without cropping ---> width=None
-min_max_countour = (500, 30000)  # defines the min and max contour areas (pixel**2) to look for
-min_max_thresh = (150, 255)  # (120,255) # defines the thresh level for image contour
+min_max_countour = (50, 30000)  # defines the min and max contour areas (pixel**2) to look for
+min_max_thresh = (251, 255)  # (120,255) # defines the thresh level for image contour
 
 ######------------######------------######------------######------------######------------
 
@@ -380,7 +392,7 @@ while (ret):
         print("Reading First Frame:")
         print("Frame #", "First Frame")
         ff_centers = plot_contours_ff(firstFrame, min_max_countour, save_frames, min_max_thresh)
-        Frames_centers.append(["First Frame", ff_centers])  # (frame#,(center_x,center_y))
+        Frames_centers.append(["First Frame", ff_centers,psnr(firstFrame,firstFrame)])  # (frame#,(center_x,center_y))
     if not ret:
         cap.release()
         cv.destroyAllWindows()
@@ -420,6 +432,7 @@ while (ret):
     print('Read a new frame: ', nex.shape)
     print('Frame #', str(count) + '\n')
     count += 1
+    psnr_results = psnr(firstFrame, nex)
 
     # Show The Frames
     if save_frames is not True:
@@ -447,7 +460,7 @@ while (ret):
 
     # print to the screen the deta of movements
     if analyze_frames is True:
-        Frames_centers.append([count - 1, centers])  # (frame#,(center_x,center_y))
+        Frames_centers.append([count - 1, centers , psnr_results])  # (frame#,(center_x,center_y),psnr_value)
 
     key = cv.waitKey(wait_key) & 0xFF
 
@@ -477,21 +490,29 @@ cwd = os.getcwd()
 df_title = os.path.join(cwd, "centers_displ.csv")
 
 centers_df = pd.DataFrame()
+# print("no of centers:", Frames_centers)
 print("no of centers:", Frames_centers[1])
 
 frame_no_lst = [f[0] for f in Frames_centers]
 centers = [f[1] for f in Frames_centers]
+psnrs = [f[2] for f in Frames_centers]
 cent_columns = {}
 
-for i in range(len(centers[0])):
-    key_str = "Center_" + str(i) + "_X"
-    c_x = [c[i][0] for c in centers]
-    cent_columns[key_str] = c_x
-    key_str = "Center_" + str(i) + "_Y"
-    c_y = [c[i][1] for c in centers]
-    cent_columns[key_str] = c_y
+try:
+    for i in range(len(centers[0])):
+        key_str = "Center_" + str(i) + "_X"
+        c_x = [c[i][0] for c in centers]
+        cent_columns[key_str] = c_x
+        key_str = "Center_" + str(i) + "_Y"
+        c_y = [c[i][1] for c in centers]
+        cent_columns[key_str] = c_y
+
+except IndexError:
+    print("No Centers Found")
+    pass
 
 centers_df["Frame"] = frame_no_lst
+centers_df["PSNR"] = psnrs
 for k, v in cent_columns.items():
     centers_df[k] = v
 
